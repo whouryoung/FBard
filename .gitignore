@@ -1,0 +1,29 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Dataset images (folder layout is kept; local samples are not published)
+datasets/**/*.png
+datasets/**/*.jpg
+datasets/**/*.jpeg
+datasets/**/*.bmp
+datasets/**/*.tif
+datasets/**/*.tiff
+datasets/**/*.webp
+
+# Pretrained weights downloaded at runtime
+backbones/weights/*.pth
+backbones/weights/*.pt
+backbones/weights/*.ckpt
+backbones/weights/*.bin
+
+# Training / visualization outputs
+saved_results/
+visualize_results/
+
+# OS / editor
+.idea/
+.DS_Store
+Thumbs.db
