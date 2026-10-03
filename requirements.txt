@@ -1,0 +1,20 @@
+# Install with: pip install -r requirements.txt
+# For a specific CUDA build of PyTorch, install torch/torchvision first:
+#   https://pytorch.org/get-started/locally/
+
+torch>=2.1
+torchvision>=0.16
+numpy
+tqdm
+Pillow
+kornia
+torchmetrics
+timm
+scikit-learn
+opencv-python
+matplotlib
+scipy
+scikit-image
+pandas
+transformers
+adeval

@@ -5,8 +5,13 @@ FBard: Feature-Level Background Recalibration for Unsupervised Anomaly Detection
 ## Requirements
 
 - Python 3.8+
-- PyTorch with CUDA
-- Dependencies: `torch`, `torchvision`, `timm`, `kornia`, `torchmetrics`, `scikit-learn`, `opencv-python`, `Pillow`, `tqdm`, etc.
+- PyTorch with CUDA (recommended)
+
+```bash
+pip install -r requirements.txt
+```
+
+If you need a specific CUDA build of PyTorch, install `torch` and `torchvision` from [pytorch.org](https://pytorch.org/get-started/locally/) first, then run the same command.
 
 ## Dataset Layout
 
