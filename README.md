@@ -10,6 +10,8 @@ FBard: Feature-Level Background Recalibration for Unsupervised Anomaly Detection
 
 ## Dataset Layout
 
+Download the [MIAD](https://miad-2022.github.io/) dataset and place it under `datasets/MIAD`.
+
 Point `--dataset_path` and `--class_name` at one object category:
 
 ```
