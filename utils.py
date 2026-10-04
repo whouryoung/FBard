@@ -1,4 +1,5 @@
 from collections import defaultdict
+import argparse
 import torch
 from numpy.random import normal
 import random
@@ -21,6 +22,32 @@ from aug_funcs import rot_img, translation_img, hflip_img, grey_img, rot90_img
 import torch.backends.cudnn as cudnn
 from adeval import EvalAccumulatorCuda
 from pathlib import Path
+
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return False
+    v = str(v).strip().lower()
+    if v in {"true", "1", "yes", "y", "t"}:
+        return True
+    if v in {"false", "0", "no", "n", "f"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {v}")
+
+
+def to_device(data, device):
+    if isinstance(data, torch.Tensor):
+        return data.to(device)
+    elif isinstance(data, dict):
+        return {key: to_device(value, device) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [to_device(item, device) for item in data]
+    elif isinstance(data, tuple):
+        return tuple(to_device(item, device) for item in data)
+    else:
+        return data
 
 
 # Compute evaluation metrics with optional GPU acceleration

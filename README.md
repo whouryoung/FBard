@@ -67,6 +67,31 @@ Loads weights from the path above by default. Override with `--weight_path`.
 
 Visualizations are written to `visualize_results/{save_name}/` unless `--disable_visualize` is set.
 
-## Notes
+## Logical Anomaly Detection
 
-- For logical anomaly detection (composition branch), use `run_FBard_logical.py` instead.
+Turn on the composition / logical branch with `--use_logical_branch true`. Other defaults stay the same as standard training; a typical MIAD logical-anomaly run looks like:
+
+```bash
+python run_FBard.py \
+  --use_logical_branch true \
+  --phase train \
+  --dataset_path ./datasets/MIAD \
+  --class_name catenary_dropper \
+  --save_name MIAD_logical
+```
+
+```bash
+python run_FBard.py \
+  --use_logical_branch true \
+  --phase test \
+  --dataset_path ./datasets/MIAD \
+  --class_name catenary_dropper \
+  --save_name MIAD_logical
+```
+
+Logical-only flags:
+
+- `--n_clusters` (default `4`) — k-means clusters for composition maps
+- `--composition_network_type` (`cnn` / `light_v4`, default `light_v4`)
+- `--skip_pretrain` — skip segmentation + AD pretraining and jump to composition training
+- `--disable_compute_metrics` — skip metric computation during logical testing
