@@ -33,10 +33,8 @@ from models import vit_encoder
 from models.FBard import FBard
 from models.FBard_logical import (
     FBard_logical,
-    CompositionAutoEncoder_CNN,
-    CompositionUNet_CNN,
-    CompositionAutoEncoder_Light_v4,
-    CompositionUNet_Light_v4,
+    CompositionAutoEncoder,
+    CompositionUNet,
 )
 from models.vision_transformer import Mlp, Aggregation_Block, Prototype_Block
 
@@ -142,12 +140,10 @@ def main(args):
     # ---------- Build model
     use_segmentaion_branch = not args.disable_segmentation_branch  # Disable when testing INP-Former
     update_bg_prototype = True if args.phase == "train" else False  # Background prototype updates enabled only during training
-    # use_bg_feature_aggregation = False if args.phase == "train" else True  # Background feature aggregation enabled only at test time (v0)
-    use_bg_feature_aggregation = True  # Background feature aggregation also enabled during training (v1)
+    use_bg_feature_aggregation = True
 
     if use_logical_branch:
         n_clusters = getattr(args, 'n_clusters', 4)
-        composition_network_type = getattr(args, 'composition_network_type', 'light_v4')
 
         # Load k-means cluster centers (test phase)
         kmeans_centers = None
@@ -182,7 +178,6 @@ def main(args):
                             kmeans_centers=kmeans_centers,
                             enable_clustering_collection=enable_clustering_collection,
                             use_composition_branch=use_composition_branch,
-                            composition_network_type=composition_network_type,
                             post_fusion=args.post_fusion)
         model = model.to(device)
 
@@ -459,14 +454,9 @@ def main(args):
             # ---------- Ensure composition branch is initialized (if n_clusters > 0)
             if args.n_clusters > 0 and (not hasattr(model, 'comp_ae') or model.comp_ae is None):
                 print_fn("Initializing composition branch for testing...")
-                if args.composition_network_type == 'light_v4':
-                    model.comp_ae = CompositionAutoEncoder_Light_v4(n_clusters=args.n_clusters).to(device)
-                    model.comp_unet = CompositionUNet_Light_v4(n_clusters=args.n_clusters).to(device)
-                else:  # 'cnn'
-                    model.comp_ae = CompositionAutoEncoder_CNN(n_clusters=args.n_clusters).to(device)
-                    model.comp_unet = CompositionUNet_CNN(n_clusters=args.n_clusters).to(device)
+                model.comp_ae = CompositionAutoEncoder(n_clusters=args.n_clusters).to(device)
+                model.comp_unet = CompositionUNet(n_clusters=args.n_clusters).to(device)
                 model.use_composition_branch = True
-                model.composition_network_type = args.composition_network_type
 
             # ---------- Compute normalization params on validation set
             normalization_params = None
@@ -581,8 +571,6 @@ if __name__ == '__main__':
                         help='Enable logical anomaly detection (FBard_logical + composition branch)')
     parser.add_argument('--n_clusters', type=int, default=4,
                         help='Number of k-means clusters (logical branch only)')
-    parser.add_argument('--composition_network_type', type=str, default='light_v4', choices=['cnn', 'light_v4'],
-                        help='Composition branch network type: cnn (v2-1, original), light_v4 (v2-4, ultra-lightweight CNN)')
 
     # training info
     parser.add_argument('--ad_epochs', type=int, default=2)

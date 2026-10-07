@@ -13,6 +13,10 @@ datasets/**/*.tif
 datasets/**/*.tiff
 datasets/**/*.webp
 
+# Foreground/background masks are published as a GitHub Release asset, not git history
+fg-bg_mask/
+MIAD_fg_bg_masks.zip
+
 # Pretrained weights downloaded at runtime
 backbones/weights/*.pth
 backbones/weights/*.pt

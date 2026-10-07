@@ -9,12 +9,7 @@ import torch.nn.functional as F
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 from tqdm import tqdm
 
-from models.FBard_logical import (
-    CompositionAutoEncoder_CNN,
-    CompositionAutoEncoder_Light_v4,
-    CompositionUNet_CNN,
-    CompositionUNet_Light_v4,
-)
+from models.FBard_logical import CompositionAutoEncoder, CompositionUNet
 from SALAD.composition_anomaly import (
     change_label_same_img_feat,
     cluster_to_onehot,
@@ -103,14 +98,9 @@ def train_composition_branch(model, dataloader, args, device, logger, save_dir):
 
     print_fn("Step 2: Training composition branch...")
     if model.comp_ae is None or model.comp_unet is None:
-        if args.composition_network_type == "light_v4":
-            model.comp_ae = CompositionAutoEncoder_Light_v4(n_clusters=args.n_clusters).to(device)
-            model.comp_unet = CompositionUNet_Light_v4(n_clusters=args.n_clusters).to(device)
-        else:
-            model.comp_ae = CompositionAutoEncoder_CNN(n_clusters=args.n_clusters).to(device)
-            model.comp_unet = CompositionUNet_CNN(n_clusters=args.n_clusters).to(device)
+        model.comp_ae = CompositionAutoEncoder(n_clusters=args.n_clusters).to(device)
+        model.comp_unet = CompositionUNet(n_clusters=args.n_clusters).to(device)
         model.use_composition_branch = True
-        model.composition_network_type = args.composition_network_type
 
     weights = [1.0] * args.n_clusters
     dice_loss_f = DiceLoss(weights).to(device)

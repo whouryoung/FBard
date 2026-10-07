@@ -58,213 +58,70 @@ class ResidualBlock(nn.Module):
         return h + self.shortcut(x)
 
 
-# ===== Original CNN-based Composition Branch Models =====
+# ===== Composition Branch Models =====
 
-class CompositionAutoEncoder_CNN(nn.Module):
-    """Original CNN-based Reconstruction Subnetwork for Composition Branch (37×37, no downsampling)"""
+class CompositionAutoEncoder(nn.Module):
+    """
+    Lightweight CNN reconstruction subnetwork for the composition branch (37×37, no downsampling).
+    Uniform intermediate channels: n_clusters -> 96 -> ... -> 96 -> n_clusters (6 ConvBlocks).
+    """
     def __init__(self, n_clusters):
         super().__init__()
-        n_channels = 128
-        ch_mults = [1, 2, 2, 2]
-        n_blocks = 1
-        
-        # Encoder (no downsampling, all layers maintain 37×37)
+        n_channels = 96
+        n_layers = 6
+
         self.image_proj = nn.Conv2d(
             n_clusters, n_channels, kernel_size=(3, 3), padding=(1, 1)
         )
-        
-        down = []
-        in_channels = n_channels
-        for i in range(len(ch_mults)):
-            out_channels = in_channels * ch_mults[i]
-            for _ in range(n_blocks):
-                down.append(ConvBlock(in_channels, out_channels))
-                in_channels = out_channels
-        
-        self.down = nn.ModuleList(down)
-        
-        # Decoder (no upsampling, all layers maintain 37×37)
-        up = []
-        for i in reversed(range(len(ch_mults))):
-            for j in range(n_blocks):
-                if j == n_blocks - 1:
-                    out_channels = in_channels // ch_mults[i]
-                else:
-                    out_channels = in_channels
-                up.append(ConvBlock(in_channels, out_channels))
-                in_channels = out_channels
-        
-        self.up = nn.ModuleList(up)
-        
+        self.feature_layers = nn.ModuleList([
+            ConvBlock(n_channels, n_channels) for _ in range(n_layers)
+        ])
         self.final = nn.Conv2d(
             n_channels, n_clusters, kernel_size=(3, 3), padding=(1, 1)
         )
-    
+
     def forward(self, x):
         x = self.image_proj(x)
-        for m in self.down:
-            x = m(x)
-        for m in self.up:
-            x = m(x)
+        for layer in self.feature_layers:
+            x = layer(x)
         x = self.final(x)
         return x
 
 
-class CompositionUNet_CNN(nn.Module):
-    """Original CNN-based Discriminative Subnetwork for Composition Branch (37×37, no downsampling)"""
+class CompositionUNet(nn.Module):
+    """
+    Lightweight CNN discriminative subnetwork for the composition branch (37×37, no downsampling).
+    Uniform intermediate channels: n_clusters*2 -> 64 -> ... -> 64 -> 1 (6 ResidualBlocks).
+    """
     def __init__(self, n_clusters):
         super().__init__()
         n_channels = 64
-        ch_mults = [1, 2, 2, 2]
-        n_blocks = 1
+        n_layers = 6
         image_channels = n_clusters * 2  # anom_seg + seg_recon
-        
+
         self.image_proj = nn.Conv2d(
             image_channels, n_channels, kernel_size=(3, 3), padding=(1, 1)
         )
-        
-        # Encoder (no downsampling, all layers maintain 37×37)
-        down = []
-        skip_con = []
-        in_channels = n_channels
-        for i in range(len(ch_mults)):
-            out_channels = in_channels * ch_mults[i]
-            for _ in range(n_blocks):
-                down.append(ResidualBlock(in_channels, out_channels))
-                skip_con.append(nn.Identity())  # Skip connection (no change in size)
-                in_channels = out_channels
-        
-        self.skip_con = nn.ModuleList(skip_con)
-        self.down = nn.ModuleList(down)
-        
-        # Decoder (no upsampling, all layers maintain 37×37)
-        up = []
-        for i in reversed(range(len(ch_mults))):
-            out_channels = in_channels
-            for _ in range(n_blocks - 1):
-                up.append(ResidualBlock(in_channels, out_channels))
-            out_channels = in_channels // ch_mults[i]
-            up.append(ResidualBlock(in_channels, out_channels))
-            in_channels = out_channels
-        
-        self.up = nn.ModuleList(up)
-        
-        self.norm = nn.GroupNorm(8, in_channels)
-        self.act = nn.SiLU()
-        self.final = nn.Conv2d(
-            in_channels, 1, kernel_size=(3, 3), padding=(1, 1)
-        )
-    
-    def forward(self, x):
-        h = [self.image_proj(x)]
-        for m, sc in zip(self.down, self.skip_con):
-            x = m(h[-1])
-            h.append(sc(x))
-        
-        x = h[-1]
-        for m in self.up:
-            s = h.pop()
-            x = x + s  # Skip connection (same size)
-            x = m(x)
-        
-        return self.final(self.act(self.norm(x)))
-
-
-# ===== Ultra-Lightweight CNN-based Composition Branch Models (v2-4) =====
-
-class CompositionAutoEncoder_Light_v4(nn.Module):
-    """
-    Ultra-Lightweight CNN-based Reconstruction Subnetwork for Composition Branch (v2-4)
-    Optimization:
-    - Uniform intermediate channels: all middle layers share the same width (no expand-then-shrink)
-    - Channel path: 4 -> 96 -> 96 -> 96 -> 96 -> 96 -> 96 -> 4
-    - vs v2-1: fixed 96 channels (25% fewer than 128), 6 layers
-    Compute: ~293M FLOPs (39% lower than v2-1 at 483M)
-    
-    Design: uniform channels simplify the network; fewer channels and layers cut compute sharply
-    """
-    def __init__(self, n_clusters):
-        super().__init__()
-        n_channels = 96  # Uniform intermediate channels (reduced from 128 in v2-1)
-        n_layers = 6  # Number of intermediate layers (6 layers, 96 channels)
-        
-        # Input projection
-        self.image_proj = nn.Conv2d(
-            n_clusters, n_channels, kernel_size=(3, 3), padding=(1, 1)
-        )
-        
-        # All intermediate layers use the same channel count
-        self.feature_layers = nn.ModuleList([
-            ConvBlock(n_channels, n_channels) for _ in range(n_layers)
-        ])
-        
-        # Output projection
-        self.final = nn.Conv2d(
-            n_channels, n_clusters, kernel_size=(3, 3), padding=(1, 1)
-        )
-    
-    def forward(self, x):
-        x = self.image_proj(x)  # (B, n_clusters, 37, 37) -> (B, 96, 37, 37)
-        for layer in self.feature_layers:
-            x = layer(x)  # (B, 96, 37, 37) -> (B, 96, 37, 37)
-        x = self.final(x)  # (B, 96, 37, 37) -> (B, n_clusters, 37, 37)
-        return x
-
-
-class CompositionUNet_Light_v4(nn.Module):
-    """
-    Ultra-Lightweight CNN-based Discriminative Subnetwork for Composition Branch (v2-4)
-    Optimization:
-    - Uniform intermediate channels: all middle layers share the same width (no expand-then-shrink)
-    - Channel path: 8 -> 64 -> 64 -> 64 -> 64 -> 64 -> 64 -> 1
-    - vs v2-1: fixed 64 channels (87.5% fewer than peak 512), 6 layers
-    Compute: ~528M FLOPs (40% lower than v2-1 at 885M)
-    
-    Design: uniform channels simplify the network; fewer channels and layers cut compute sharply
-    """
-    def __init__(self, n_clusters):
-        super().__init__()
-        n_channels = 64  # Uniform intermediate channels (reduced from max 512 in v2-1)
-        n_layers = 6  # Number of intermediate layers (6 layers, 64 channels)
-        image_channels = n_clusters * 2  # anom_seg + seg_recon
-        
-        # Input projection
-        self.image_proj = nn.Conv2d(
-            image_channels, n_channels, kernel_size=(3, 3), padding=(1, 1)
-        )
-        
-        # All intermediate layers use the same channel count; keep skip connections
         self.feature_layers = nn.ModuleList([
             ResidualBlock(n_channels, n_channels) for _ in range(n_layers)
         ])
-        
-        # Output head
         self.norm = nn.GroupNorm(8, n_channels)
         self.act = nn.SiLU()
         self.final = nn.Conv2d(
             n_channels, 1, kernel_size=(3, 3), padding=(1, 1)
         )
-    
+
     def forward(self, x):
-        x = self.image_proj(x)  # (B, n_clusters*2, 37, 37) -> (B, 64, 37, 37)
-        
-        # Feature fusion with skip connections (UNet-like, constant channels)
-        skip_features = [x]  # Save intermediate features for skip connection
+        x = self.image_proj(x)
+        skip_features = [x]
         for layer in self.feature_layers:
-            x = layer(x)  # (B, 64, 37, 37) -> (B, 64, 37, 37)
-            # Optionally add skip connection
+            x = layer(x)
             if len(skip_features) > 0 and len(skip_features) <= len(self.feature_layers) // 2:
-                x = x + skip_features[-1]  # Skip connection
+                x = x + skip_features[-1]
             skip_features.append(x)
-        
-        x = self.final(self.act(self.norm(x)))  # (B, 64, 37, 37) -> (B, 1, 37, 37)
+        x = self.final(self.act(self.norm(x)))
         return x
 
-
-# ===== Alias for backward compatibility =====
-# Backward compatibility aliases; default to CNN version
-CompositionAutoEncoder = CompositionAutoEncoder_CNN
-CompositionUNet = CompositionUNet_CNN
 
 class FBard_logical(nn.Module):
     def __init__(
@@ -303,7 +160,6 @@ class FBard_logical(nn.Module):
             kmeans_centers=None,                # k-means cluster centers (used at inference)
             enable_clustering_collection=False,  # Enable cluster-center collection (True only in anomaly-detection training)
             use_composition_branch=False,       # Enable composition branch
-            composition_network_type='cnn',    # Composition branch type: 'cnn' (v2-1) or 'light_v4' (v2-4)
             post_fusion: bool = False          # If True, skip bg_prob_map-based encoder processing (EMA and bg aggregation)
 
     ) -> None:
@@ -367,17 +223,12 @@ class FBard_logical(nn.Module):
         self.enable_clustering_collection = enable_clustering_collection  # Enable cluster-center collection
         self._clustering_collected = False  # Whether clustering collection already ran (avoid duplicates)
         self.use_composition_branch = use_composition_branch  # Enable composition branch
-        self.composition_network_type = composition_network_type  # Composition branch network type
         self.post_fusion = post_fusion
 
         # Composition branch models
         if use_composition_branch and n_clusters > 0:
-            if composition_network_type == 'light_v4':  # Ultra-Lightweight CNN (v2-4)
-                self.comp_ae = CompositionAutoEncoder_Light_v4(n_clusters=n_clusters)
-                self.comp_unet = CompositionUNet_Light_v4(n_clusters=n_clusters)
-            else:  # 'cnn' (default, v2-1)
-                self.comp_ae = CompositionAutoEncoder_CNN(n_clusters=n_clusters)
-                self.comp_unet = CompositionUNet_CNN(n_clusters=n_clusters)
+            self.comp_ae = CompositionAutoEncoder(n_clusters=n_clusters)
+            self.comp_unet = CompositionUNet(n_clusters=n_clusters)
         else:
             self.comp_ae = None
             self.comp_unet = None
