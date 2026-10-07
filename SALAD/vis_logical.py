@@ -1,6 +1,5 @@
 import gc
 import os
-import sys
 
 import cv2
 import matplotlib
@@ -85,93 +84,6 @@ def save_norm_histograms(save_dir, ad_pixel_scores, comp_pixel_scores, ad_mean, 
             color="red",
         )
     print(f"Histograms saved to {save_dir}")
-
-
-def save_test_histograms(
-    vis_path,
-    save_name,
-    test_ad_pixel_scores,
-    test_comp_pixel_scores,
-    test_ad_pixel_scores_norm,
-    test_comp_pixel_scores_norm,
-):
-    """Test-set pixel-score histograms before/after z-score normalization."""
-    if vis_path is not None:
-        vis_path_parts = vis_path.replace("\\", "/").split("/")
-        if len(vis_path_parts) >= 2:
-            dataset_name = vis_path_parts[-2] if len(vis_path_parts) >= 2 else "unknown"
-            save_dir = os.path.join("visualize_analysis", vis_path_parts[-1], dataset_name)
-        else:
-            save_dir = os.path.join("visualize_analysis", "test_set")
-    elif save_name is not None:
-        save_dir = os.path.join("visualize_analysis", save_name, "test_set")
-    else:
-        save_dir = os.path.join("visualize_analysis", "test_set")
-
-    os.makedirs(save_dir, exist_ok=True)
-    print("Drawing test set histograms...")
-    print(f"  Merging pixel scores... (AD: {len(test_ad_pixel_scores)} batches, Comp: {len(test_comp_pixel_scores)} batches)")
-    sys.stdout.flush()
-    max_samples = 10_000_000
-    test_ad_pixel_all = torch.cat(test_ad_pixel_scores).numpy()
-    print(f"  AD branch: {len(test_ad_pixel_all)} pixels (before sampling)")
-    sys.stdout.flush()
-    test_ad_pixel_all = _maybe_downsample(test_ad_pixel_all, max_samples)
-    if len(test_comp_pixel_scores) > 0:
-        test_comp_pixel_all = torch.cat(test_comp_pixel_scores).numpy()
-        print(f"  Composition branch: {len(test_comp_pixel_all)} pixels (before sampling)")
-        sys.stdout.flush()
-        test_comp_pixel_all = _maybe_downsample(test_comp_pixel_all, max_samples)
-    else:
-        test_comp_pixel_all = np.array([])
-
-    print("  Drawing AD branch histogram (before normalization)...")
-    _save_hist(
-        test_ad_pixel_all,
-        os.path.join(save_dir, "test_ad_branch_pixel_score_histogram_before_norm.png"),
-        "Pixel-level Anomaly Score (AD Branch, Before Normalization)",
-        f"Distribution of Pixel-level Anomaly Scores (AD Branch, Test Set, Before Normalization)\nMean={np.mean(test_ad_pixel_all):.4f}, Std={np.std(test_ad_pixel_all):.4f}",
-        color="blue",
-    )
-    print("  AD branch histogram saved.")
-    if len(test_comp_pixel_all) > 0:
-        print("  Drawing Composition branch histogram (before normalization)...")
-        _save_hist(
-            test_comp_pixel_all,
-            os.path.join(save_dir, "test_composition_branch_pixel_score_histogram_before_norm.png"),
-            "Pixel-level Anomaly Score (Composition Branch, Before Normalization)",
-            f"Distribution of Pixel-level Anomaly Scores (Composition Branch, Test Set, Before Normalization)\nMean={np.mean(test_comp_pixel_all):.4f}, Std={np.std(test_comp_pixel_all):.4f}",
-            color="orange",
-        )
-        print("  Composition branch histogram saved.")
-    if len(test_ad_pixel_scores_norm) > 0:
-        print("  Drawing AD branch histogram (after normalization)...")
-        test_ad_pixel_all_norm = _maybe_downsample(torch.cat(test_ad_pixel_scores_norm).numpy(), max_samples)
-        _save_hist(
-            test_ad_pixel_all_norm,
-            os.path.join(save_dir, "test_ad_branch_pixel_score_histogram_after_norm.png"),
-            "Pixel-level Anomaly Score (AD Branch, After Normalization)",
-            f"Distribution of Pixel-level Anomaly Scores (AD Branch, Test Set, After Normalization)\nMean={np.mean(test_ad_pixel_all_norm):.4f}, Std={np.std(test_ad_pixel_all_norm):.4f}",
-            color="green",
-        )
-        print("  AD branch histogram (after normalization) saved.")
-    if len(test_comp_pixel_scores_norm) > 0:
-        print("  Drawing Composition branch histogram (after normalization)...")
-        test_comp_pixel_all_norm = _maybe_downsample(torch.cat(test_comp_pixel_scores_norm).numpy(), max_samples)
-        _save_hist(
-            test_comp_pixel_all_norm,
-            os.path.join(save_dir, "test_composition_branch_pixel_score_histogram_after_norm.png"),
-            "Pixel-level Anomaly Score (Composition Branch, After Normalization)",
-            f"Distribution of Pixel-level Anomaly Scores (Composition Branch, Test Set, After Normalization)\nMean={np.mean(test_comp_pixel_all_norm):.4f}, Std={np.std(test_comp_pixel_all_norm):.4f}",
-            color="red",
-        )
-        print("  Composition branch histogram (after normalization) saved.")
-    print(f"Test set histograms saved to {save_dir}")
-    plt.close("all")
-    matplotlib.pyplot.close("all")
-    torch.cuda.empty_cache()
-    gc.collect()
-    print("Histogram data released.")
 
 
 def visualize_composition_eval(

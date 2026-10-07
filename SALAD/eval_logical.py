@@ -9,7 +9,6 @@ from tqdm import tqdm
 from SALAD.composition_infer import run_composition_branch
 from SALAD.vis_logical import (
     save_norm_histograms,
-    save_test_histograms,
     visualize_composition_eval,
 )
 from utils import (
@@ -186,13 +185,7 @@ def evaluation_batch_with_composition(model, dataloader, device, max_ratio=0, re
     gt_list = []
     img_path_list = []
     gaussian_kernel = get_gaussian_kernel(kernel_size=9, sigma=7).to(device)
-    
-    # Collect test pixel scores for histograms — only when visualization is enabled
-    test_ad_pixel_scores = []  # Test AD branch pixel scores (before normalization)
-    test_comp_pixel_scores = []  # Test Composition branch pixel scores (before normalization)
-    test_ad_pixel_scores_norm = []  # Test AD branch pixel scores (after normalization)
-    test_comp_pixel_scores_norm = []  # Test Composition branch pixel scores (after normalization)
-    
+
     # Collect all test pixel scores for global min/max visualization — only when enabled
     all_ad_scores = []  # AD branch heatmap pixel scores for all test samples
     all_comp_scores = []  # Composition branch heatmap pixel scores for all test samples
@@ -251,29 +244,17 @@ def evaluation_batch_with_composition(model, dataloader, device, max_ratio=0, re
                 recon_map_batch = comp_result.recon_maps
             
             # ===== Normalization and fusion =====
-            # Collect pre-normalization pixel scores for histograms — only when visualization enabled
-            if not skip_visualization:
-                test_ad_pixel_scores.append(anomaly_map_ad.cpu().flatten())
-                if comp_anomaly_map is not None:
-                    test_comp_pixel_scores.append(comp_anomaly_map.cpu().flatten())
-            
             # Z-score normalize all pixels in both branch anomaly maps (if params provided)
             if use_normalization:
                 # Z-score normalize using stored parameters
                 anomaly_map_ad_flat = anomaly_map_ad.flatten(1)  # (B, H*W)
                 anomaly_map_ad_norm_flat = (anomaly_map_ad_flat - ad_mean) / ad_std
                 anomaly_map_ad_norm = anomaly_map_ad_norm_flat.view(anomaly_map_ad.shape)  # (B, 1, H, W)
-                # Collect post-normalization pixel scores for histograms — only when visualization enabled
-                if not skip_visualization:
-                    test_ad_pixel_scores_norm.append(anomaly_map_ad_norm.cpu().flatten())
-                
+
                 if comp_anomaly_map is not None:
                     comp_anomaly_map_flat = comp_anomaly_map.flatten(1)  # (B, H*W)
                     comp_anomaly_map_norm_flat = (comp_anomaly_map_flat - comp_mean) / comp_std
                     comp_anomaly_map_norm = comp_anomaly_map_norm_flat.view(comp_anomaly_map.shape)  # (B, 1, H, W)
-                    # Collect post-normalization pixel scores for histograms — only when visualization enabled
-                    if not skip_visualization:
-                        test_comp_pixel_scores_norm.append(comp_anomaly_map_norm.cpu().flatten())
                     # Fuse: sum normalized anomaly maps from both branches
                     fused_anomaly_map = anomaly_map_ad_norm + comp_anomaly_map_norm  # (B, 1, H, W)
                     # Release intermediate variables
@@ -452,17 +433,6 @@ def evaluation_batch_with_composition(model, dataloader, device, max_ratio=0, re
             all_disc_scores=all_disc_scores,
             all_fused_scores=all_fused_scores,
         )
-
-    if not skip_visualization and len(test_ad_pixel_scores) > 0:
-        save_test_histograms(
-            vis_path,
-            save_name,
-            test_ad_pixel_scores,
-            test_comp_pixel_scores,
-            test_ad_pixel_scores_norm,
-            test_comp_pixel_scores_norm,
-        )
-        del test_ad_pixel_scores, test_comp_pixel_scores, test_ad_pixel_scores_norm, test_comp_pixel_scores_norm
 
     # ===== Release visualization data; keep only what metrics need
     if vis_path is not None and not skip_visualization:
