@@ -16,5 +16,6 @@ matplotlib
 scipy
 scikit-image
 pandas
-transformers
+# Pin transformers for PyTorch 2.1.x (AutoDL default). Newer transformers (5.x) needs torch>=2.5.
+transformers>=4.40.0,<5.0.0
 adeval
