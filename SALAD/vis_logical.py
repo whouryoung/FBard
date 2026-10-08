@@ -51,9 +51,6 @@ def visualize_composition_eval(
         all_ad_scores_flat = torch.cat(all_ad_scores).numpy()
         global_ad_p25 = float(np.percentile(all_ad_scores_flat, 25))
         global_ad_p99 = float(np.percentile(all_ad_scores_flat, 99))
-        global_ad_min = float(all_ad_scores_flat.min())
-        global_ad_max = float(all_ad_scores_flat.max())
-        print(f"Global AD branch score range: [{global_ad_min:.4f}, {global_ad_max:.4f}], 25%-99% percentile: [{global_ad_p25:.4f}, {global_ad_p99:.4f}]")
         # Release memory immediately
         del all_ad_scores_flat
         del all_ad_scores
@@ -66,9 +63,6 @@ def visualize_composition_eval(
         all_comp_scores_flat = torch.cat(all_comp_scores).numpy()
         global_comp_p25 = float(np.percentile(all_comp_scores_flat, 25))
         global_comp_p99 = float(np.percentile(all_comp_scores_flat, 99))
-        global_comp_min = float(all_comp_scores_flat.min())
-        global_comp_max = float(all_comp_scores_flat.max())
-        print(f"Global Composition branch score range: [{global_comp_min:.4f}, {global_comp_max:.4f}], 25%-99% percentile: [{global_comp_p25:.4f}, {global_comp_p99:.4f}]")
         # Release memory immediately
         del all_comp_scores_flat
         del all_comp_scores
@@ -81,9 +75,6 @@ def visualize_composition_eval(
         all_disc_scores_flat = torch.cat(all_disc_scores).numpy()
         global_disc_p25 = float(np.percentile(all_disc_scores_flat, 25))
         global_disc_p99 = float(np.percentile(all_disc_scores_flat, 99))
-        global_disc_min = float(all_disc_scores_flat.min())
-        global_disc_max = float(all_disc_scores_flat.max())
-        print(f"Global Discriminator output score range: [{global_disc_min:.4f}, {global_disc_max:.4f}], 25%-99% percentile: [{global_disc_p25:.4f}, {global_disc_p99:.4f}]")
         # Release memory immediately
         del all_disc_scores_flat
         del all_disc_scores
@@ -96,9 +87,6 @@ def visualize_composition_eval(
         all_fused_scores_flat = torch.cat(all_fused_scores).numpy()
         global_fused_p25 = float(np.percentile(all_fused_scores_flat, 25))
         global_fused_p99 = float(np.percentile(all_fused_scores_flat, 99))
-        global_fused_min = float(all_fused_scores_flat.min())
-        global_fused_max = float(all_fused_scores_flat.max())
-        print(f"Global Fused anomaly map score range: [{global_fused_min:.4f}, {global_fused_max:.4f}], 25%-99% percentile: [{global_fused_p25:.4f}, {global_fused_p99:.4f}]")
         # Release memory immediately
         del all_fused_scores_flat
         del all_fused_scores
