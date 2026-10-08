@@ -480,11 +480,8 @@ def main(args):
                 )
 
                 # Compute normalization parameters
-                # Create visualize_analysis directory for histograms
-                dataset_name = args.dataset_path.split('/')[-1]
-                hist_save_dir = os.path.join('visualize_analysis', args.save_name, dataset_name, args.class_name)
                 ad_mean, ad_std, comp_mean, comp_std = compute_normalization_params(
-                    val_dataloader, model, device, args.n_clusters, max_ratio=0.01, save_dir=hist_save_dir
+                    val_dataloader, model, device, args.n_clusters, max_ratio=0.01
                 )
                 normalization_params = (ad_mean, ad_std, comp_mean, comp_std)
                 print_fn("=" * 80)

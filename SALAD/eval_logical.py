@@ -7,10 +7,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from SALAD.composition_infer import run_composition_branch
-from SALAD.vis_logical import (
-    save_norm_histograms,
-    visualize_composition_eval,
-)
+from SALAD.vis_logical import visualize_composition_eval
 from utils import (
     ader_evaluator,
     cal_anomaly_maps,
@@ -50,19 +47,16 @@ def compute_image_level_score(anomaly_map, max_ratio=0.01):
     return sp_score
 
 
-def compute_normalization_params(val_dataloader, model, device, n_clusters, max_ratio=0.01, save_dir=None):
+def compute_normalization_params(val_dataloader, model, device, n_clusters, max_ratio=0.01):
     """
     Compute normalization parameters (mean and std) for both branches on the validation set.
     Mean and std are computed from all pixel-level anomaly scores for z-score normalization.
     Returns: (ad_mean, ad_std, comp_mean, comp_std)
-    save_dir: directory to save histograms; if None, histograms are not saved
     """
     model.eval()
     ad_pixel_scores = []  # AD branch pixel-level anomaly scores (unnormalized)
     comp_pixel_scores = []  # Composition branch pixel-level anomaly scores (unnormalized)
-    ad_pixel_scores_norm = []  # AD branch pixel-level anomaly scores (normalized)
-    comp_pixel_scores_norm = []  # Composition branch pixel-level anomaly scores (normalized)
-    
+
     print("Computing normalization parameters on validation set...")
     from utils import cal_anomaly_maps, get_gaussian_kernel
     gaussian_kernel = get_gaussian_kernel(kernel_size=9, sigma=7).to(device)
@@ -127,11 +121,6 @@ def compute_normalization_params(val_dataloader, model, device, n_clusters, max_
     print(f"Normalization parameters computed (based on pixel-level scores):")
     print(f"  AD branch: mean={ad_mean:.4f}, std={ad_std:.4f}")
     print(f"  Composition branch: mean={comp_mean:.4f}, std={comp_std:.4f}")
-
-    if save_dir is not None and len(ad_pixel_scores) > 0:
-        save_norm_histograms(
-            save_dir, ad_pixel_scores, comp_pixel_scores, ad_mean, ad_std, comp_mean, comp_std,
-        )
 
     return ad_mean, ad_std, comp_mean, comp_std
 
