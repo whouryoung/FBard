@@ -484,12 +484,10 @@ def evaluation_batch_with_composition(model, dataloader, device, max_ratio=0, re
         if 'global_fused_min' in locals():
             del global_fused_min, global_fused_max
         # Close all matplotlib figures
+        import matplotlib.pyplot as plt
         plt.close('all')
-        import matplotlib
-        matplotlib.pyplot.close('all')
         # Free GPU and CPU memory
         torch.cuda.empty_cache()
-        import gc
         gc.collect()  # Force garbage collection
         print("Visualization data released.")
     
