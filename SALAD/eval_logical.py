@@ -455,23 +455,6 @@ def evaluation_batch_with_composition(model, dataloader, device, max_ratio=0, re
             del all_disc_scores
         if 'all_fused_scores' in locals():
             del all_fused_scores
-        # Release global percentile variables (including min/max)
-        if 'global_ad_p25' in locals():
-            del global_ad_p25, global_ad_p99
-        if 'global_ad_min' in locals():
-            del global_ad_min, global_ad_max
-        if 'global_comp_p25' in locals():
-            del global_comp_p25, global_comp_p99
-        if 'global_comp_min' in locals():
-            del global_comp_min, global_comp_max
-        if 'global_disc_p25' in locals():
-            del global_disc_p25, global_disc_p99
-        if 'global_disc_min' in locals():
-            del global_disc_min, global_disc_max
-        if 'global_fused_p25' in locals():
-            del global_fused_p25, global_fused_p99
-        if 'global_fused_min' in locals():
-            del global_fused_min, global_fused_max
         # Close all matplotlib figures
         import matplotlib.pyplot as plt
         plt.close('all')
