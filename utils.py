@@ -260,8 +260,7 @@ def anomaly_map_to_jet_rgb(ano_map, target_size=None, vmin=None, vmax=None):
 
     Normalization:
     - If vmin/vmax are given: linear scale (ano_map - vmin) / (vmax - vmin) and clip to [0, 1].
-      visualize_img should pass vmin=0, vmax=1 (anomaly map already normalized in evaluation_batch
-      using global GT=0/GT=1 pixel means).
+      visualize_img passes global 25%/99% percentiles over the test-set anomaly maps.
     - If not given: per-image min-max normalization (for other callers).
     """
     ano_map = np.asarray(ano_map, dtype=np.float32)
@@ -329,14 +328,14 @@ def visualize_class_score_distribution(scores_gt0, scores_gt1, class_name, datas
     '''
     Plot anomaly score distribution histograms.
     Args:
-    scores_gt0: Normalized anomaly scores for GT=0 pixels (normalized = (score - pr_mean_of_good_px) / (pr_mean_of_abnormal_px - pr_mean_of_good_px))
-    scores_gt1: Normalized anomaly scores for GT=1 pixels (normalized = (score - pr_mean_of_good_px) / (pr_mean_of_abnormal_px - pr_mean_of_good_px))
+    scores_gt0: Anomaly scores for GT=0 pixels (normalized via global 25%/99% percentiles)
+    scores_gt1: Anomaly scores for GT=1 pixels (normalized via global 25%/99% percentiles)
     class_name: Class name
     dataset_name: Dataset name
     vis_path: Path to save visualization outputs (may be None)
     version_name: Version name
     '''
-    # Input scores are already normalized (normalized_anomaly_map)
+    # Input scores are already normalized via global 25%/99% percentiles
     # Bin with fixed resolution 0.005
     if len(scores_gt0) > 0 and len(scores_gt1) > 0:
         all_scores = np.concatenate([scores_gt0, scores_gt1])
@@ -999,140 +998,99 @@ def evaluation_batch(model, dataloader, device, max_ratio=0, resize_mask=None, v
             print()
 
         # Visualization =====
-        # Anomaly map normalization params (for distribution plots)
+        # Global 25%/99% percentile bounds over all test-set anomaly pixels (colormap scaling)
+        score_p25, score_p99 = None, None
         if visualize_score_distribution or vis_path is not None:
-            if gt_list_px is not None and pr_list_px is not None:
-                pr_mean_of_good_px = pr_list_px[gt_list_px == 0].mean()  # Mean prediction for GT=0 pixels
-                pr_mean_of_abnormal_px = pr_list_px[gt_list_px == 1].mean()  # Mean prediction for GT=1 pixels
-            elif vis_path is not None and len(anomaly_map_list) > 0 and len(gt_list) > 0:
-                # Recompute from anomaly_map_list and gt_list if gt_list_px/pr_list_px unavailable
-                all_pr_good = []
-                all_pr_abnormal = []
-                for anomaly_map, gt in zip(anomaly_map_list, gt_list):
-                    ano_np = anomaly_map[0].cpu().numpy() if isinstance(anomaly_map, torch.Tensor) else anomaly_map[0]
-                    gt_np = gt[0].cpu().numpy() if isinstance(gt, torch.Tensor) else gt[0]
-                    all_pr_good.extend(ano_np[gt_np == 0].flatten())
-                    all_pr_abnormal.extend(ano_np[gt_np == 1].flatten())
-                pr_mean_of_good_px = np.mean(all_pr_good) if len(all_pr_good) > 0 else 0.0
-                pr_mean_of_abnormal_px = np.mean(all_pr_abnormal) if len(all_pr_abnormal) > 0 else 1.0
-            else:
-                # Default fallback
-                pr_mean_of_good_px = 0.0
-                pr_mean_of_abnormal_px = 1.0
-        
+            all_scores_for_percentile = []
+            if pr_list_px is not None:
+                pr_flat = np.asarray(pr_list_px).ravel()
+                if len(pr_flat) > 0:
+                    all_scores_for_percentile.append(pr_flat)
+            elif len(anomaly_map_list) > 0:
+                for anomaly_map in anomaly_map_list:
+                    ano_np = anomaly_map.cpu().numpy() if isinstance(anomaly_map, torch.Tensor) else np.asarray(anomaly_map)
+                    all_scores_for_percentile.append(ano_np.ravel())
+            if len(all_scores_for_percentile) > 0:
+                all_scores_flat = np.concatenate(all_scores_for_percentile)
+                score_p25 = float(np.percentile(all_scores_flat, 25))
+                score_p99 = float(np.percentile(all_scores_flat, 99))
+                del all_scores_flat, all_scores_for_percentile
+
         if vis_path is not None:
             print("Visualizing results...")
-            # ---------- Version name from vis_path
-            version_name = os.path.basename(vis_path.rstrip('/\\'))  # Version name
-            if not version_name:  # vis_path ends with /; use parent dir name
+            version_name = os.path.basename(vis_path.rstrip('/\\'))
+            if not version_name:
                 version_name = os.path.basename(os.path.dirname(vis_path.rstrip('/\\')))
-            # ---------- Normalize anomaly maps and save visualizations
-            if pr_mean_of_abnormal_px > pr_mean_of_good_px:  # Expected: abnormal mean > normal mean
-                # Only when image visualization is enabled
-                if vis_img_num > 0 and len(img_list) > 0:
-                    class_vis_count = defaultdict(int)  # Per-class vis count
 
-                    for batch_idx, (img, seg_map, anomaly_map, gt, img_path) in enumerate(zip(img_list, seg_map_list, anomaly_map_list, gt_list,
-                                                                       img_path_list)):
-                        defect_type = img_path[0].replace('\\', '/').split('/')[-2]
-                        if class_vis_count[defect_type] < vis_img_num:  # Under per-class vis limit
+            if vis_img_num > 0 and len(img_list) > 0:
+                class_vis_count = defaultdict(int)
+                for batch_idx, (img, seg_map, anomaly_map, gt, img_path) in enumerate(zip(
+                        img_list, seg_map_list, anomaly_map_list, gt_list, img_path_list)):
+                    defect_type = img_path[0].replace('\\', '/').split('/')[-2]
+                    if class_vis_count[defect_type] < vis_img_num:
+                        cluster_assignments_batch = (
+                            cluster_assignments_list[batch_idx]
+                            if batch_idx < len(cluster_assignments_list) else None
+                        )
+                        visualize_img(
+                            imgs=img, segmentation_map=seg_map, anomaly_map=anomaly_map, gt=gt,
+                            img_path=img_path, save_root=vis_path,
+                            cluster_assignments=cluster_assignments_batch, n_clusters=n_clusters,
+                            vmin=score_p25, vmax=score_p99,
+                        )
+                        class_vis_count[defect_type] += img.shape[0]
+                        print(f"Class [{defect_type}] visualization progress: {class_vis_count[defect_type]}/{vis_img_num}")
 
-                            normalized_anomaly_map = (anomaly_map - pr_mean_of_good_px) / (
-                                        pr_mean_of_abnormal_px - pr_mean_of_good_px)  # Map normal pixels to 0, abnormal to 1
-                            cluster_assignments_batch = cluster_assignments_list[batch_idx] if batch_idx < len(cluster_assignments_list) else None
-                            visualize_img(imgs=img, segmentation_map=seg_map, anomaly_map=normalized_anomaly_map, gt=gt,
-                                          img_path=img_path, save_root=vis_path, cluster_assignments=cluster_assignments_batch, n_clusters=n_clusters)
+            if visualize_score_distribution and class_scores_dict is not None:
+                total_classes = len(class_scores_dict)
+                if total_classes > 0:
+                    print(f"\nGenerating anomaly score distribution bar charts ({total_classes} classes)...")
+                    for idx, (class_name, scores) in enumerate(class_scores_dict.items(), 1):
+                        dataset_name = class_dataset_dict[class_name]
+                        scores_gt0_raw = np.array(scores['gt0'])
+                        scores_gt1_raw = np.array(scores['gt1'])
+                        if score_p25 is not None and score_p99 is not None and score_p99 > score_p25:
+                            scores_gt0 = (scores_gt0_raw - score_p25) / (score_p99 - score_p25)
+                            scores_gt1 = (scores_gt1_raw - score_p25) / (score_p99 - score_p25)
+                        else:
+                            scores_gt0 = scores_gt0_raw
+                            scores_gt1 = scores_gt1_raw
+                        print(f"  [{idx}/{total_classes}] Class: {class_name} (GT=0: {len(scores_gt0)} pixels, GT=1: {len(scores_gt1)} pixels)")
+                        visualize_class_score_distribution(
+                            scores_gt0=scores_gt0,
+                            scores_gt1=scores_gt1,
+                            class_name=class_name,
+                            dataset_name=dataset_name,
+                            vis_path=vis_path,
+                            version_name=version_name
+                        )
+                    print(f"Done! Generated anomaly score distribution plots for {total_classes} classes\n")
 
-                            class_vis_count[defect_type] += img.shape[0]
-                            print(f"Class [{defect_type}] visualization progress: {class_vis_count[defect_type]}/{vis_img_num}")
+            del img_list, seg_map_list, anomaly_map_list, gt_list, img_path_list
+            if class_scores_dict is not None:
+                del class_scores_dict
+            del class_dataset_dict
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
-                # ---------- Per-class score distribution histograms
-                if visualize_score_distribution and class_scores_dict is not None:
-                    total_classes = len(class_scores_dict)
-                    if total_classes > 0:
-                        print(f"\nGenerating anomaly score distribution bar charts ({total_classes} classes)...")
-                        # Use save_name as version when vis_path is None
-                        if vis_path is None:
-                            version_name = save_name if save_name is not None else 'default'
-                        for idx, (class_name, scores) in enumerate(class_scores_dict.items(), 1):
-                            dataset_name = class_dataset_dict[class_name]
-                            scores_gt0_raw = np.array(scores['gt0'])
-                            scores_gt1_raw = np.array(scores['gt1'])
-                            
-                            # Normalize: GT=0 mean -> 0, GT=1 mean -> 1
-                            # Raw means for GT=0 and GT=1
-                            mean_gt0_raw = scores_gt0_raw.mean() if len(scores_gt0_raw) > 0 else 0.0
-                            mean_gt1_raw = scores_gt1_raw.mean() if len(scores_gt1_raw) > 0 else 0.0
-                            norm_denominator = mean_gt1_raw - mean_gt0_raw
-                            if norm_denominator > 0:
-                                # GT=0 mean -> 0, GT=1 mean -> 1
-                                scores_gt0 = (scores_gt0_raw - mean_gt0_raw) / norm_denominator
-                                scores_gt1 = (scores_gt1_raw - mean_gt0_raw) / norm_denominator
-                            else:
-                                # Zero/negative denominator: use raw scores
-                                scores_gt0 = scores_gt0_raw
-                                scores_gt1 = scores_gt1_raw
-                            
-                            # Print normalized means
-                            mean_gt0 = scores_gt0.mean() if len(scores_gt0) > 0 else 0.0
-                            mean_gt1 = scores_gt1.mean() if len(scores_gt1) > 0 else 0.0
-                            print(f"  [{idx}/{total_classes}] Class: {class_name} (GT=0: {len(scores_gt0)} pixels, GT=1: {len(scores_gt1)} pixels)")
-                            print(f"      Normalized mean score: GT=0={mean_gt0:.4f}, GT=1={mean_gt1:.4f}")
-                            visualize_class_score_distribution(
-                                scores_gt0=scores_gt0,
-                                scores_gt1=scores_gt1,
-                                class_name=class_name,
-                                dataset_name=dataset_name,
-                                vis_path=vis_path,
-                                version_name=version_name
-                            )
-                        print(f"Done! Generated anomaly score distribution plots for {total_classes} classes\n")
-
-                # Free visualization data and GPU memory
-                del img_list, seg_map_list, anomaly_map_list, gt_list, img_path_list
-                if class_scores_dict is not None:
-                    del class_scores_dict
-                del class_dataset_dict
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-
-            else:
-                print("Model prediction anomaly: mean anomaly score for anomalous pixels <= normal pixels")
-                import sys
-                sys.exit(1)
-        
         # ---------- Per-class distribution histograms (even when vis_path is None)
         if visualize_score_distribution and class_scores_dict is not None:
             total_classes = len(class_scores_dict)
             if total_classes > 0:
                 print(f"\nGenerating anomaly score distribution bar charts ({total_classes} classes)...")
-                # Use save_name as version when vis_path is None
                 if vis_path is None:
                     version_name = save_name if save_name is not None else 'default'
                 for idx, (class_name, scores) in enumerate(class_scores_dict.items(), 1):
                     dataset_name = class_dataset_dict[class_name]
                     scores_gt0_raw = np.array(scores['gt0'])
                     scores_gt1_raw = np.array(scores['gt1'])
-                    
-                    # Normalize: GT=0 mean -> 0, GT=1 mean -> 1
-                    # Raw means for GT=0 and GT=1
-                    mean_gt0_raw = scores_gt0_raw.mean() if len(scores_gt0_raw) > 0 else 0.0
-                    mean_gt1_raw = scores_gt1_raw.mean() if len(scores_gt1_raw) > 0 else 0.0
-                    norm_denominator = mean_gt1_raw - mean_gt0_raw
-                    if norm_denominator > 0:
-                        # GT=0 mean -> 0, GT=1 mean -> 1
-                        scores_gt0 = (scores_gt0_raw - mean_gt0_raw) / norm_denominator
-                        scores_gt1 = (scores_gt1_raw - mean_gt0_raw) / norm_denominator
+                    if score_p25 is not None and score_p99 is not None and score_p99 > score_p25:
+                        scores_gt0 = (scores_gt0_raw - score_p25) / (score_p99 - score_p25)
+                        scores_gt1 = (scores_gt1_raw - score_p25) / (score_p99 - score_p25)
                     else:
-                        # Zero/negative denominator: use raw scores
                         scores_gt0 = scores_gt0_raw
                         scores_gt1 = scores_gt1_raw
-                    
-                    # Print normalized means
-                    mean_gt0 = scores_gt0.mean() if len(scores_gt0) > 0 else 0.0
-                    mean_gt1 = scores_gt1.mean() if len(scores_gt1) > 0 else 0.0
                     print(f"  [{idx}/{total_classes}] Class: {class_name} (GT=0: {len(scores_gt0)} pixels, GT=1: {len(scores_gt1)} pixels)")
-                    print(f"      Normalized mean score: GT=0={mean_gt0:.4f}, GT=1={mean_gt1:.4f}")
                     visualize_class_score_distribution(
                         scores_gt0=scores_gt0,
                         scores_gt1=scores_gt1,
@@ -1332,7 +1290,8 @@ save_root: Root directory for visualization outputs
 '''
 
 
-def visualize_img(imgs, segmentation_map, anomaly_map, gt, img_path, save_root, cluster_assignments=None, n_clusters=None):
+def visualize_img(imgs, segmentation_map, anomaly_map, gt, img_path, save_root,
+                  cluster_assignments=None, n_clusters=None, vmin=None, vmax=None):
     batch_size = imgs.shape[0]
 
     for i in range(batch_size):
@@ -1351,21 +1310,22 @@ def visualize_img(imgs, segmentation_map, anomaly_map, gt, img_path, save_root, 
         gt_map = gt[i].squeeze(0).cpu().detach().numpy()  # GT mask
         plt.imsave(os.path.join(save_dir, fr'{img_file_name}_gt.png'), gt_map, cmap='gray')
 
-        ano_map = anomaly_map[i].squeeze(0).cpu().detach().numpy()  # Anomaly map (normalized in evaluation_batch via global GT=0/GT=1 means)
+        # Raw anomaly map; colormap scaled by global 25%/99% percentiles when vmin/vmax are set
+        ano_map = anomaly_map[i].squeeze(0).cpu().detach().numpy()
         h_img, w_img = cv2_img.shape[:2]
         save_anomaly_jet_heatmap(
             ano_map,
             os.path.join(save_dir, fr'{img_file_name}_ano.png'),
             target_size=(w_img, h_img),
-            vmin=0,
-            vmax=1,
+            vmin=vmin,
+            vmax=vmax,
         )
 
         save_anomaly_overlay(
             cv2_img, ano_map,
             os.path.join(save_dir, fr'{img_file_name}_ano_overlay.png'),
-            vmin=0,
-            vmax=1,
+            vmin=vmin,
+            vmax=vmax,
         )
 
         if segmentation_map is not None:
