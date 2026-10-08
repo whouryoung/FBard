@@ -49,15 +49,7 @@ Two classes ship extra variants; copy one variant's pngs into `mask/` before tra
 
 ### Blade30
 
-Blade30 is a drone-based wind turbine blade inspection dataset ([cong-yang/Blade30](https://github.com/cong-yang/Blade30)). Download the official release from that repository, then place the raw archives under `datasets/raw/Blade30` **before** running the preparation script.
-
-Download options (from the upstream README):
-
-- [Baidu Disc — part1 (blade1–15)](https://pan.baidu.com/s/17kv5Xadz1QcSrvoG58WtBw) (code: `1234`)
-- [Baidu Disc — part2 (blade16–30)](https://pan.baidu.com/s/1hzcwdc6sBXOeja3nkfartg) (code: `1234`)
-- [OneDrive — full dataset](https://1drv.ms/u/s!AoXJBmXKVWu5tmtUzCJULhrtYuIP?e=KYOtlo)
-- [Google Drive — blade_1_15_with_annotation](https://drive.google.com/file/d/1HbB4t9xV2oCgSSxR9hMEOU6v9qDfetmR/view?usp=sharing)
-- [Google Drive — blade_16_30_with_annotation](https://drive.google.com/file/d/1SwRdMzA7zCkNVlHuWvk8uK6eDToM0mUV/view?usp=sharing)
+Blade30 is a drone-based wind turbine blade inspection dataset. Download the official release from [cong-yang/Blade30](https://github.com/cong-yang/Blade30), then place the raw archives under `datasets/raw/Blade30` **before** running the preparation script.
 
 Expected raw layout after extraction:
 
