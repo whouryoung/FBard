@@ -15,6 +15,8 @@ If you need a specific CUDA build of PyTorch, install `torch` and `torchvision` 
 
 ## Dataset Layout
 
+### MIAD
+
 1. Download the [MIAD](https://miad-2022.github.io/) images and place them under `datasets/MIAD`.
 2. Download our foreground/background masks: **[MIAD_fg_bg_masks.zip](https://github.com/whouryoung/FBard/releases/download/masks-v1/MIAD_fg_bg_masks.zip)**
 3. Extract the archive into `datasets/` so that each class has a `mask/` folder next to `train/` and `test/`.
@@ -44,6 +46,72 @@ Two classes ship extra variants; copy one variant's pngs into `mask/` before tra
 | --- | --- | --- |
 | `nut_and_bolt` | `mask/`, `no_plate/` | `mask/` |
 | `photovoltaic_module` | `coarse/`, `fine/` | `fine/` |
+
+### Blade30
+
+Blade30 is a drone-based wind turbine blade inspection dataset ([cong-yang/Blade30](https://github.com/cong-yang/Blade30)). Download the official release from that repository, then place the raw archives under `datasets/raw/Blade30` **before** running the preparation script.
+
+Download options (from the upstream README):
+
+- [Baidu Disc — part1 (blade1–15)](https://pan.baidu.com/s/17kv5Xadz1QcSrvoG58WtBw) (code: `1234`)
+- [Baidu Disc — part2 (blade16–30)](https://pan.baidu.com/s/1hzcwdc6sBXOeja3nkfartg) (code: `1234`)
+- [OneDrive — full dataset](https://1drv.ms/u/s!AoXJBmXKVWu5tmtUzCJULhrtYuIP?e=KYOtlo)
+- [Google Drive — blade_1_15_with_annotation](https://drive.google.com/file/d/1HbB4t9xV2oCgSSxR9hMEOU6v9qDfetmR/view?usp=sharing)
+- [Google Drive — blade_16_30_with_annotation](https://drive.google.com/file/d/1SwRdMzA7zCkNVlHuWvk8uK6eDToM0mUV/view?usp=sharing)
+
+Expected raw layout after extraction:
+
+```
+datasets/raw/Blade30/
+├── 3_blade_1_15_with_labeldata/
+│   └── <blade_dir>/              # one directory per blade
+│       └── <sample_dir>/         # exactly one sample subdirectory (not named mask)
+│           ├── *.jpg / *.jpeg    # images
+│           ├── *.json            # same stem as a defect image → defect annotation
+│           └── mask/
+│               └── <stem>.png    # foreground mask for normal images
+└── 3_blade_16_30_with_labeldata/
+    └── ...                       # same structure
+```
+
+Requirements:
+
+- Both group folders `3_blade_1_15_with_labeldata` and `3_blade_16_30_with_labeldata` must exist.
+- Under each blade directory there must be **exactly one** sample subdirectory (directories named `mask` are ignored when discovering samples).
+- Images with a same-name `.json` are treated as defects; images without `.json` are treated as normal (good).
+- Foreground masks used for training live at `<sample_dir>/mask/<image_stem>.png`.
+- The preparation script expects **30** sample directories in total.
+
+After the raw data is in place, run:
+
+```bash
+python scripts/prepare_blade30_random.py
+```
+
+Optional flags: `--raw-root`, `--out-root`, `--seed` (default `42`), `--dry-run`.
+
+The script writes the FBard-ready split to `datasets/Blade30/`:
+
+```
+datasets/Blade30/
+├── train/
+│   └── good/
+├── test/
+│   ├── good/
+│   └── defect/
+├── ground_truth/
+│   └── defect/
+└── mask/                         # foreground masks for train/good
+```
+
+Then point training/testing at this prepared root (`dataset_path` / `class_name` → `datasets/Blade30`):
+
+```bash
+python run_FBard.py \
+  --phase train \
+  --dataset_path ./datasets \
+  --class_name Blade30
+```
 
 ## Training
 
